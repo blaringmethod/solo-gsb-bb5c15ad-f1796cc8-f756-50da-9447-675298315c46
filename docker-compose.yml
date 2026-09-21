@@ -1,0 +1,57 @@
+services:
+  api:
+    build: .
+    image: one-time-dropbox-api:latest
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://dropbox:dropbox@db:5432/dropbox
+      REDIS_URL: redis://redis:6379/0
+      MAX_TEXT_BYTES: "65536"      # 文本最大 64 KiB
+      MAX_FILE_BYTES: "1048576"    # 文件最大 1 MiB
+      DEFAULT_TTL_SECONDS: "86400"
+      MAX_TTL_SECONDS: "604800"    # TTL 上限 7 天
+      REAPER_INTERVAL_SECONDS: "30"
+      LOCK_TTL_SECONDS: "15"
+      TERMINAL_CACHE_TTL_SECONDS: "3600"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dropbox
+      POSTGRES_PASSWORD: dropbox
+      POSTGRES_DB: dropbox
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dropbox -d dropbox"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
